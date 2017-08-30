@@ -33,7 +33,7 @@ class Switch(object):
             return False
 
 
-parser = argparse.ArgumentParser(__file__, description="Fake Apache Log Generator")
+parser = argparse.ArgumentParser(__file__, description="Fake Apache Access Log Generator")
 parser.add_argument("--output", "-o", dest='output_type', help="Write to a Log file, a gzip file or to STDOUT",
                     choices=['LOG', 'GZ', 'CONSOLE'])
 parser.add_argument("--count", "-c", dest='num_lines', help="Number of lines to generate (0 for infinite)", type=int,
