@@ -40,7 +40,7 @@ parser.add_argument("--count", "-c", dest='num_lines', help="Number of lines to 
                     default=1)
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
 parser.add_argument("--start-date", "-s", dest='start_date', help="Start date (YYYY-MM-DD)", type=str)
-parser.add_argument("--days", "-d", dest='continuous_days', help="Num of days to generate data for", type=int)
+parser.add_argument("--days", "-d", dest='generate_days', help="Num of days to generate data for", type=int, default=1)
 
 args = parser.parse_args()
 
@@ -48,7 +48,7 @@ log_lines = args.num_lines
 file_prefix = args.file_prefix
 output_type = args.output_type
 start_date = args.start_date
-continuous_days = args.continuous_days
+generate_days = args.generate_days
 
 faker = Faker()
 
@@ -87,24 +87,27 @@ today = datetime.datetime.today()
 start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d") if start_date \
     else datetime.datetime(today.year, today.month, today.day)
 
-flag = True
-while flag:
-    otime = start_time + datetime.timedelta(seconds=int(truncated_gauss(0, 86400, 0, 1, 2)))
+count_list = [int(log_lines / generate_days) for i in range(generate_days)]
+count_list[0] += log_lines % generate_days
 
-    ip = faker.ipv4()
-    dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
-    tz = datetime.datetime.now(local).strftime('%z')
-    vrb = numpy.random.choice(verb, p=[0.6, 0.1, 0.1, 0.2])
+for i in range(generate_days):
+    line_count = count_list[i]
+    while line_count > 0:
+        otime = start_time + datetime.timedelta(seconds=int(truncated_gauss(0, 86400, 0, 1, 2)) + (i * 86400))
 
-    uri = random.choice(resources)
-    if uri.find("apps") > 0:
-        uri += repr(random.randint(1000, 10000))
+        ip = faker.ipv4()
+        dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
+        tz = datetime.datetime.now(local).strftime('%z')
+        vrb = numpy.random.choice(verb, p=[0.6, 0.1, 0.1, 0.2])
 
-    resp = numpy.random.choice(response, p=[0.9, 0.04, 0.02, 0.04])
-    byt = int(random.gauss(5000, 50))
-    referer = faker.uri()
-    useragent = numpy.random.choice(ualist, p=[0.5, 0.3, 0.1, 0.05, 0.05])()
-    f.write('%s - - [%s %s] "%s %s HTTP/1.0" %s %s "%s" "%s"\n' % (ip, dt, tz, vrb, uri, resp, byt, referer, useragent))
+        uri = random.choice(resources)
+        if uri.find("apps") > 0:
+            uri += repr(random.randint(1000, 10000))
 
-    log_lines = log_lines - 1
-    flag = False if log_lines == 0 else True
+        resp = numpy.random.choice(response, p=[0.9, 0.04, 0.02, 0.04])
+        byt = int(random.gauss(5000, 50))
+        referer = faker.uri()
+        useragent = numpy.random.choice(ualist, p=[0.5, 0.3, 0.1, 0.05, 0.05])()
+        f.write('%s - - [%s %s] "%s %s HTTP/1.0" %s %s "%s" "%s"\n' % (ip, dt, tz, vrb, uri, resp, byt, referer, useragent))
+
+        line_count = line_count - 1
