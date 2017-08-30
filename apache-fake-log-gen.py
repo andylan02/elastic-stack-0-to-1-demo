@@ -36,23 +36,24 @@ class Switch(object):
 parser = argparse.ArgumentParser(__file__, description="Fake Apache Log Generator")
 parser.add_argument("--output", "-o", dest='output_type', help="Write to a Log file, a gzip file or to STDOUT",
                     choices=['LOG', 'GZ', 'CONSOLE'])
-parser.add_argument("--num", "-n", dest='num_lines', help="Number of lines to generate (0 for infinite)", type=int,
+parser.add_argument("--count", "-c", dest='num_lines', help="Number of lines to generate (0 for infinite)", type=int,
                     default=1)
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
-parser.add_argument("--sleep", "-s", help="Sleep this long between lines (in seconds)", default=0.0, type=float)
+parser.add_argument("--start-date", "-s", dest='start_date', help="Start date (YYYY-MM-DD)", type=str)
+parser.add_argument("--days", "-d", dest='continuous_days', help="Num of days to generate data for", type=int)
 
 args = parser.parse_args()
 
 log_lines = args.num_lines
 file_prefix = args.file_prefix
 output_type = args.output_type
+start_date = args.start_date
+continuous_days = args.continuous_days
 
 faker = Faker()
 
 timestr = time.strftime("%Y%m%d-%H%M%S")
-otime = datetime.datetime.now()
-
-outFileName = 'access_log_' + timestr + '.log' if not file_prefix else file_prefix + '_access_log_' + timestr + '.log'
+outFileName = 'apache_log_' + timestr + '.log' if not file_prefix else file_prefix + '_' + timestr + '.log'
 
 for case in Switch(output_type):
     if case('LOG'):
@@ -65,6 +66,14 @@ for case in Switch(output_type):
     if case():
         f = sys.stdout
 
+
+def truncated_gauss(min_out, max_out, mu, sigma, cut_point):
+    while True:
+        res = random.gauss(mu, sigma)
+        if mu - cut_point < res < mu + cut_point:
+            return (res - (mu - cut_point)) / (2 * cut_point) * (max_out - min_out) + min_out
+
+
 response = ["200", "404", "500", "301"]
 
 verb = ["GET", "POST", "DELETE", "PUT"]
@@ -74,13 +83,13 @@ resources = ["/list", "/wp-content", "/wp-admin", "/explore", "/search/tag/list"
 
 ualist = [faker.firefox, faker.chrome, faker.safari, faker.internet_explorer, faker.opera]
 
+today = datetime.datetime.today()
+start_time = datetime.datetime.strptime(start_date, "%Y-%m-%d") if start_date \
+    else datetime.datetime(today.year, today.month, today.day)
+
 flag = True
 while flag:
-    if args.sleep:
-        increment = datetime.timedelta(seconds=args.sleep)
-    else:
-        increment = datetime.timedelta(seconds=random.randint(30, 300))
-    otime += increment
+    otime = start_time + datetime.timedelta(seconds=int(truncated_gauss(0, 86400, 0, 1, 2)))
 
     ip = faker.ipv4()
     dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
@@ -99,5 +108,3 @@ while flag:
 
     log_lines = log_lines - 1
     flag = False if log_lines == 0 else True
-    if args.sleep:
-        time.sleep(args.sleep)
