@@ -18,24 +18,23 @@ $ python3 apache-fake-log-gen.py
 
 Generate 100 log lines into a .log file
 ```
-$ python3 apache-fake-log-gen.py -n 100 -o LOG
+$ python3 apache-fake-log-gen.py -c 100 -o LOG
 ```
 
 Generate 100 log lines into a .gz file
 ```
-$ python3 apache-fake-log-gen.py -n 100 -o GZ
-```
-
-Infinite log file generation (useful for testing File Tail Readers)
-```
-$ python3 apache-fake-log-gen.py -n 0 -o LOG
+$ python3 apache-fake-log-gen.py -c 100 -o GZ
 ```
 
 Prefix the output filename 
 ```
-$ python3 apache-fake-log-gen.py -n 100 -o LOG -p WEB1
+$ python3 apache-fake-log-gen.py -c 100 -o LOG -p WEB1
 ```
 
+Generate log from 2018-02-01 to 2018-02-10
+```
+$ python3 apache-fake-log-gen.py -c 100000 -s 2018-02-01 -d 10
+```
 
 Detailed help
 ```
@@ -51,7 +50,7 @@ optional arguments:
   --output {LOG,GZ,CONSOLE}, -o {LOG,GZ,CONSOLE}
                         Write to a Log file, a gzip file or to STDOUT
   --count NUM_LINES, -c NUM_LINES
-                        Number of lines to generate (0 for infinite)
+                        Number of lines to generate (default 1)
   --prefix FILE_PREFIX, -p FILE_PREFIX
                         Prefix the output file name
   --start-date START_DATE, -s START_DATE

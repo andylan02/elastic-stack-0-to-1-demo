@@ -28,7 +28,7 @@ def truncated_gauss(min_out, max_out, mu, sigma, cut_point):
 parser = argparse.ArgumentParser(__file__, description="Fake Apache Access Log Generator")
 parser.add_argument("--output", "-o", dest='output_type', help="Write to a Log file, a gzip file or to STDOUT",
                     choices=['LOG', 'GZ', 'CONSOLE'])
-parser.add_argument("--count", "-c", dest='num_lines', help="Number of lines to generate (0 for infinite)", type=int,
+parser.add_argument("--count", "-c", dest='num_lines', help="Number of lines to generate (default 1)", type=int,
                     default=1)
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
 parser.add_argument("--start-date", "-s", dest='start_date', help="Start date (YYYY-MM-DD)", type=str)
