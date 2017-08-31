@@ -1,11 +1,13 @@
 # Fake Apache Access Log Generator
 
 This script generates a boatload of fake apache access logs very quickly.
-Its useful for generating fake workloads for [data ingest](http://github.com/streamsets/datacollector) and/or analytics applications.
+Its useful for generating fake workloads for ingest via [filebeat](https://github.com/elastic/beats/tree/master/filebeat) and/or analytics applications.
 
 It can write log lines to console, to log files or directly to gzip files.
 
 It utilizes the excellent [Faker](https://github.com/joke2k/faker/) library to generate realistic ip's, URI's etc.
+
+> Even though it's a bit messy, I insist to put all code in one file for convenience of the user.
 
 ***
 
@@ -37,6 +39,7 @@ $ python3 apache-fake-log-gen.py -c 100000 -s 2018-02-01 -d 10
 ```
 
 Detailed help
+
 ```
 $ python3 apache-fake-log-gen.py -h
 usage: apache-fake-log-gen.py [-h] [--output {LOG,GZ,CONSOLE}]
@@ -50,7 +53,7 @@ optional arguments:
   --output {LOG,GZ,CONSOLE}, -o {LOG,GZ,CONSOLE}
                         Write to a Log file, a gzip file or to STDOUT
   --count NUM_LINES, -c NUM_LINES
-                        Number of lines to generate (default 1)
+                        Min/Max number of lines to generate (default 1)
   --prefix FILE_PREFIX, -p FILE_PREFIX
                         Prefix the output file name
   --start-date START_DATE, -s START_DATE
