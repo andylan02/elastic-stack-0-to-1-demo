@@ -21,9 +21,9 @@ Generate 100 log lines into a .log file
 $ python3 apache-fake-log-gen.py -c 100 -o LOG
 ```
 
-Generate 100 log lines into a .gz file
+Generate between 80 and 120 log lines into a .gz file
 ```
-$ python3 apache-fake-log-gen.py -c 100 -o GZ
+$ python3 apache-fake-log-gen.py -c 80/120 -o GZ
 ```
 
 Prefix the output filename 
@@ -31,7 +31,7 @@ Prefix the output filename
 $ python3 apache-fake-log-gen.py -c 100 -o LOG -p WEB1
 ```
 
-Generate log from 2018-02-01 to 2018-02-10
+Generate 100000 logs from 2018-02-01 to 2018-02-10
 ```
 $ python3 apache-fake-log-gen.py -c 100000 -s 2018-02-01 -d 10
 ```

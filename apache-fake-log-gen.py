@@ -147,10 +147,12 @@ def truncated_gauss(min_out, max_out, mu, sigma, cut_point):
 def generate_uri():
     vrb = numpy.random.choice(verb, p=[0.6, 0.1, 0.1, 0.2])
     uri = numpy.random.choice(resources, p=[0.1, 0.3, 0.1, 0.05, 0.05, 0.05, 0.1, 0.1, 0.05, 0.1])
-    if uri.find("uploads") > 0:
+    if uri.find("wp-content") > 0:
         uri += '/%s/%s/%s' % (repr(random.randint(2000, 2017)), repr(random.randint(1, 12)),
                               ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(12)]))
         vrb = verb[0]
+    if uri.find("posts") > 0:
+        uri += '/%s' % ''.join([random.choice(string.ascii_letters + string.digits) for _ in range(6)])
     if uri.find("appID") > 0:
         uri += repr(random.randint(1000, 10000))
     return vrb, uri
@@ -159,8 +161,8 @@ def generate_uri():
 parser = argparse.ArgumentParser(__file__, description="Fake Apache Access Log Generator")
 parser.add_argument("--output", "-o", dest='output_type', help="Write to a Log file, a gzip file or to STDOUT",
                     choices=['LOG', 'GZ', 'CONSOLE'])
-parser.add_argument("--count", "-c", dest='log_lines', help="Number of lines to generate (default 1)", type=int,
-                    default=1)
+parser.add_argument("--count", "-c", dest='log_lines', help="Min/Max number of lines to generate (default 1)", type=str,
+                    default='1')
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
 parser.add_argument("--start-date", "-s", dest='start_date', help="Start date (YYYY-MM-DD)", type=str)
 parser.add_argument("--days", "-d", dest='generate_days', help="Num of days to generate data for", type=int, default=1)
@@ -171,6 +173,13 @@ file_prefix = args.file_prefix
 output_type = args.output_type
 start_date = args.start_date
 generate_days = args.generate_days
+
+if log_lines.find('/') > 0:
+    min_line = int(log_lines.split('/')[0])
+    max_line = int(log_lines.split('/')[1])
+    log_lines = random.randint(min_line, max_line)
+else:
+    log_lines = int(log_lines)
 
 timestr = time.strftime("%Y%m%d-%H%M%S")
 outFileName = 'apache_log_' + timestr + '.log' if not file_prefix else file_prefix + '_' + timestr + '.log'
@@ -198,7 +207,7 @@ for i in range(generate_days):
         dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
         tz = datetime.datetime.now(get_localzone()).strftime('%z')
         vrb, uri = generate_uri()
-        resp = numpy.random.choice(response, p=[0.9, 0.04, 0.02, 0.04])
+        resp = numpy.random.choice(response, p=[0.93, 0.02, 0.02, 0.03])
         byt = int(random.gauss(5000, 50))
         referer = faker.uri()
         useragent = numpy.random.choice(ualist, p=[0.5, 0.3, 0.1, 0.05, 0.05])()
