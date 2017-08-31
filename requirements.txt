@@ -1,3 +1,4 @@
+netaddr>=0.7.19
 Faker>=0.8.0
 numpy>=1.13.1
 Faker>=0.8.0
