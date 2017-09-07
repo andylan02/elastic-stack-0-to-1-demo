@@ -124,7 +124,7 @@ china_ip_pool = ['1.24.0.0/13', '1.48.0.0/15', '1.56.0.0/13', '1.68.0.0/14', '1.
                  '222.176.0.0/13', '222.184.0.0/13', '222.200.0.0/16', '222.208.0.0/13', '222.216.0.0/14',
                  '222.220.0.0/15', '222.222.0.0/15', '222.240.0.0/13', '223.4.0.0/14', '223.8.0.0/13', '223.64.0.0/11',
                  '223.96.0.0/12', '223.112.0.0/14', '223.144.0.0/12', '223.255.0.0/17', '223.240.0.0/13']
-response = ["200", "404", "500", "301"]
+response = ["200", "301", "404", "500"]
 verb = ["GET", "POST", "DELETE", "PUT"]
 resources = ["/list", "/wp-content/uploads", "/wp-content/archive", "/wp-content/cache", "/wp-admin", "/explore",
              "/search/tag/list", "/app/main/posts", "/posts/posts/explore", "/apps/cart.jsp?appID="]
@@ -166,6 +166,9 @@ parser.add_argument("--count", "-c", dest='log_lines', help="Min/Max number of l
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
 parser.add_argument("--start-date", "-s", dest='start_date', help="Start date (YYYY-MM-DD)", type=str)
 parser.add_argument("--days", "-d", dest='generate_days', help="Num of days to generate data for", type=int, default=1)
+parser.add_argument("--301", "-3", dest='error_301', help="Generate more 301 errors", const=True, nargs='?')
+parser.add_argument("--404", "-4", dest='error_404', help="Generate more 404 errors", const=True, nargs='?')
+parser.add_argument("--500", "-5", dest='error_500', help="Generate more 500 errors", const=True, nargs='?')
 
 args = parser.parse_args()
 log_lines = args.log_lines
@@ -173,6 +176,9 @@ file_prefix = args.file_prefix
 output_type = args.output_type
 start_date = args.start_date
 generate_days = args.generate_days
+more_301_error = args.error_301
+more_404_error = args.error_404
+more_500_error = args.error_500
 
 if log_lines.find('/') > 0:
     min_line = int(log_lines.split('/')[0])
@@ -207,10 +213,19 @@ for i in range(generate_days):
         dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
         tz = datetime.datetime.now(get_localzone()).strftime('%z')
         vrb, uri = generate_uri()
-        resp = numpy.random.choice(response, p=[0.93, 0.02, 0.02, 0.03])
         byt = int(random.gauss(5000, 50))
         referer = faker.uri()
         useragent = numpy.random.choice(ualist, p=[0.5, 0.3, 0.1, 0.05, 0.05])()
+
+        resp = numpy.random.choice(response, p=[0.93, 0.03, 0.02, 0.02])
+        if uri.startswith(resources[1]) and (more_301_error or more_404_error or more_500_error):
+            dice = random.randint(0, 10)
+            if dice < 2 and more_301_error:
+                resp = "301"
+            elif 2 <= dice < 4 and more_404_error:
+                resp = "404"
+            elif 4 <= dice < 6 and more_500_error:
+                resp = "500"
 
         f.write('%s - - [%s %s] "%s %s HTTP/1.0" %s %s "%s" "%s"\n' %
                 (ip, dt, tz, vrb, uri, resp, byt, referer, useragent))
