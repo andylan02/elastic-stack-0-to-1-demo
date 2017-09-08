@@ -166,9 +166,11 @@ parser.add_argument("--count", "-c", dest='log_lines', help="Min/Max number of l
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
 parser.add_argument("--start-date", "-s", dest='start_date', help="Start date (YYYY-MM-DD)", type=str)
 parser.add_argument("--days", "-d", dest='generate_days', help="Num of days to generate data for", type=int, default=1)
-parser.add_argument("--301", "-3", dest='error_301', help="Generate more 301 errors", const=True, nargs='?')
-parser.add_argument("--404", "-4", dest='error_404', help="Generate more 404 errors", const=True, nargs='?')
-parser.add_argument("--500", "-5", dest='error_500', help="Generate more 500 errors", const=True, nargs='?')
+parser.add_argument("--more-404", dest='more_404_error', help="Generate more 404 errors", const=True, nargs='?')
+parser.add_argument("--404-begin-time", dest='error_404_start_time',
+                    help="Begin time of 404 errors generated in seconds", type=int, default=1)
+parser.add_argument("--404-end-time", dest='error_404_end_time',
+                    help="End time of 404 errors generated in seconds", type=int, default=86400)
 
 args = parser.parse_args()
 log_lines = args.log_lines
@@ -176,9 +178,9 @@ file_prefix = args.file_prefix
 output_type = args.output_type
 start_date = args.start_date
 generate_days = args.generate_days
-more_301_error = args.error_301
-more_404_error = args.error_404
-more_500_error = args.error_500
+more_404 = args.more_404_error
+error_404_start_time = args.error_404_start_time
+error_404_end_time = args.error_404_end_time
 
 if log_lines.find('/') > 0:
     min_line = int(log_lines.split('/')[0])
@@ -207,7 +209,8 @@ count_list[0] += log_lines % generate_days
 for i in range(generate_days):
     line_count = count_list[i]
     for _ in range(line_count):
-        otime = start_time + datetime.timedelta(seconds=int(truncated_gauss(0, 86400, 0, 1, 2)) + (i * 86400))
+        time_in_seconds = int(truncated_gauss(0, 86400, 0, 1, 2)) + (i * 86400)
+        otime = start_time + datetime.timedelta(seconds=time_in_seconds)
 
         ip = get_a_china_ip()  # faker.ipv4()
         dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
@@ -218,14 +221,9 @@ for i in range(generate_days):
         useragent = numpy.random.choice(ualist, p=[0.5, 0.3, 0.1, 0.05, 0.05])()
 
         resp = numpy.random.choice(response, p=[0.93, 0.03, 0.02, 0.02])
-        if uri.startswith(resources[1]) and (more_301_error or more_404_error or more_500_error):
-            dice = random.randint(0, 10)
-            if dice < 2 and more_301_error:
-                resp = "301"
-            elif 2 <= dice < 4 and more_404_error:
+        if uri.startswith(resources[1]) and more_404 and error_404_start_time < time_in_seconds < error_404_end_time:
+            if random.randint(0, 10) < 5:
                 resp = "404"
-            elif 4 <= dice < 6 and more_500_error:
-                resp = "500"
 
         f.write('%s - - [%s %s] "%s %s HTTP/1.0" %s %s "%s" "%s"\n' %
                 (ip, dt, tz, vrb, uri, resp, byt, referer, useragent))

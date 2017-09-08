@@ -38,9 +38,9 @@ Generate 100000 logs from 2018-02-01 to 2018-02-10
 $ python3 apache-fake-log-gen.py -c 100000 -s 2018-02-01 -d 10
 ```
 
-Generate 100000 logs of 2018-02-01 with more 404 errors
+Generate 100000 logs of 2018-02-01 with more 404 errors after 12:00
 ```
-$ python3 apache-fake-log-gen.py -c 100000 -s 2018-02-01 --404
+$ python3 apache-fake-log-gen.py -c 100000 -s 2018-02-01 --more-404 --404-begin-time 43200
 ```
 
 Detailed help
@@ -65,12 +65,12 @@ optional arguments:
                         Start date (YYYY-MM-DD)
   --days CONTINUOUS_DAYS, -d CONTINUOUS_DAYS
                         Num of days to generate data for
-  --301 [ERROR_301], -3 [ERROR_301]
-                        Generate more 301 errors
-  --404 [ERROR_404], -4 [ERROR_404]
+   --more-404 [MORE_404_ERROR]
                         Generate more 404 errors
-  --500 [ERROR_500], -5 [ERROR_500]
-                        Generate more 500 errors
+  --404-begin-time ERROR_404_START_TIME
+                        Begin time of 404 errors generated in seconds
+  --404-end-time ERROR_404_END_TIME
+                        End time of 404 errors generated in seconds
 ```
 
 
