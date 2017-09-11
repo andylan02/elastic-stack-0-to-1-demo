@@ -1,0 +1,675 @@
+# 预备
+
+## 安装Docker
+
+curl -sSL get.docker.com | bash
+sudo usermod -aG docker `whoami`
+
+docker pull docker.elastic.co/elasticsearch/elasticsearch:5.5.2
+docker pull docker.elastic.co/kibana/kibana:5.5.2
+docker pull docker.elastic.co/beats/metricbeat:5.5.2
+docker pull docker.elastic.co/beats/filebeat:5.5.2
+
+## 允许ES使用足够的内存
+
+echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+
+## 准备日志文件
+
+mkdir logs && cd logs
+
+wget https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/apache-log-generator/requirements.txt
+sudo apt install -y python3-pip
+pip3 install -r requirements.txt
+
+wget https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/apache-log-generator/apache-fake-log-gen.py
+for i in `seq -f '%02g' 3 10`; do
+  python3 apache-fake-log-gen.py -c 40000/60000 -s 2017-09-$i >log-$i.log &
+done
+python3 apache-fake-log-gen.py -c 50000 -s 2017-09-11 --more-404 --404-begin-time 50000 >log-11.log
+
+## 定义encode_url函数
+
+cat <<EOF >>~/.bashrc
+function encode_url() {
+  python3 -c "import urllib.request; print(urllib.parse.quote('\${1}'))"
+}
+EOF
+source ~/.bashrc
+
+## 启动ES和Kibana
+
+docker run -d --name elasticsearch \
+  -p 9200:9200 \
+  -p 9300:9300 \
+  -e ELASTIC_PASSWORD=changeme \
+  -e ALLOW_INSECURE_DEFAULT_TLS_CERT=true \
+  docker.elastic.co/elasticsearch/elasticsearch:5.5.2
+
+docker run -d --name kibana \
+  -p 5601:5601 \
+  -e ELASTICSEARCH_URL=http://`hostname -i`:9200 \
+  -e ELASTICSEARCH_USERNAME=elastic \
+  -e ELASTICSEARCH_PASSWORD=changeme \
+  docker.elastic.co/kibana/kibana:5.5.2
+
+# 第一部分 Beats
+
+## 目录
+
+mkdir beats && cd beats && mkdir in out
+
+## Metricbeat
+
+cat <<EOF >metricbeat.yml
+metricbeat.modules:
+- module: system
+  metricsets:
+  - cpu
+  - load
+  - memory
+  - network
+  - fsstat
+  - diskio
+  enabled: true
+  period: 20s
+  cpu_ticks: false
+- module: docker
+  metricsets:
+  - container
+  - cpu
+  - diskio
+  - healthcheck
+  - info
+  - memory
+  - network
+  hosts: ["unix:///var/run/docker.sock"]
+  period: 20s
+output.elasticsearch:
+  hosts: ["`hostname -i`:9200"]
+  username: "elastic"
+  password: "changeme"
+output.file:
+  path: "/out"
+  filename: metric.log
+EOF
+
+chmod 644 metricbeat.yml
+sudo chown root:root metricbeat.yml
+
+docker run -d --name metricbeat \
+    -v `pwd`/metricbeat.yml:/usr/share/metricbeat/metricbeat.yml:ro \
+    -v `pwd`/out:/out:rw \
+    -v /var/run/docker.sock:/var/run/docker.sock:ro \
+    --user root \
+    docker.elastic.co/beats/metricbeat:5.5.2
+
+## Filebeat
+
+curl -O "https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/conf/default.json"
+
+cat <<EOF >filebeat.yml
+filebeat.modules:
+- module: apache2
+  access:
+    var.paths: ["/in/*.log"]
+output.elasticsearch:
+  hosts: ["`hostname -i`:9200"]
+  username: elastic
+  password: changeme
+EOF
+
+chmod 644 filebeat.yml
+
+docker run -d --name filebeat \
+    -v `pwd`/default.json:/usr/share/filebeat/module/apache2/access/ingest/default.json:ro \
+    -v `pwd`/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro \
+    -v `pwd`/in:/in:ro \
+    -v `pwd`/out:/out:rw \
+    docker.elastic.co/beats/filebeat:5.5.2 \
+    filebeat -e -modules=apache2
+
+mv ~/logs/*.log in/
+
+
+# 第二部分 ElasticSearch
+
+## 增删改查文档
+
+PUT movies/movie/1
+{
+    "title": "肖申克的救赎",
+    "title_en": "The Shawshank Redemption",
+    "director": "弗兰克·德拉邦特",
+    "actor": "蒂姆·罗宾斯",
+    "year": 1994
+}
+
+PUT movies/movie/1
+{
+    "title": "肖申克的救赎",
+    "title_en": "The Shawshank Redemption",
+    "director": "弗兰克·德拉邦特",
+    "actor": "蒂姆·罗宾斯",
+    "year": 1994,
+    "types": ["犯罪", "剧情"]
+}
+
+GET movies/movie/1
+
+DELETE movies/movie/1
+
+## 操作索引
+
+GET movies
+
+DELETE movies
+
+POST movies
+{
+  "settings": {
+    "index": {
+      "number_of_shards": "1",
+      "number_of_replicas": "0"
+    }
+  }
+}
+
+GET /_cat/indices
+
+## 批量数据操作
+
+POST movies/movie/_bulk
+{ "index" : { "_id" : "1" } }
+{
+    "title": "肖申克的救赎",
+    "title_en": "The Shawshank Redemption",
+    "director": "弗兰克·德拉邦特",
+    "actor": ["蒂姆·罗宾斯"],
+    "year": 1994,
+    "country": "美国",
+    "types": ["犯罪", "剧情"]
+}
+{ "index" : { "_id" : "2" } }
+{
+    "title": "霸王别姬",
+    "title_en": "Farewell My Concubine",
+    "director": "陈凯歌",
+    "actor": ["张国荣", "张丰毅"],
+    "year": 1993,
+    "country": "中国",
+    "types": ["爱情", "剧情"]
+}
+{ "index" : { "_id" : "3" } }
+{
+    "title": "这个杀手不太冷",
+    "title_en": "Leon",
+    "director": "吕克·贝松",
+    "actor": ["让·雷诺", "娜塔莉·波特曼"],
+    "year": 1994,
+    "country": "法国",
+    "types": ["剧情", "动作", "犯罪"]
+}
+{ "index" : { "_id" : "4" } }
+{
+    "title": "阿甘正传",
+    "title_en": "Forrest Gump",
+    "director": "罗伯特·泽米吉斯",
+    "actor": ["汤姆·汉克斯"],
+    "year": 1994,
+    "country": "美国",
+    "types": ["爱情", "剧情"]
+}
+{ "index" : { "_id" : "5" } }
+{
+    "title": "美丽人生",
+    "title_en": "Life Is Beautiful",
+    "director": "罗伯托·贝尼尼",
+    "actor": ["罗伯托·贝尼尼"],
+    "year": 1997,
+    "country": "意大利",
+    "types": ["剧情", "喜剧", "爱情", "战争"]
+}
+{ "index" : { "_id" : "6" } }
+{
+    "title": "千与千寻",
+    "title_en": "Spirited Away",
+    "director": "宫崎骏",
+    "actor": ["柊瑠美", "入野自由"],
+    "year": 2001,
+    "country": "日本",
+    "types": ["奇幻", "剧情", "动画"]
+}
+{ "index" : { "_id" : "7" } }
+{
+    "title": "辛德勒的名单",
+    "title_en": "Schindler's List",
+    "director": "史蒂文·斯皮尔伯格",
+    "actor": ["连姆·尼森"],
+    "year": 1993,
+    "country": "美国",
+    "types": ["剧情", "历史", "战争"]
+}
+{ "index" : { "_id" : "8" } }
+{
+    "title": "泰坦尼克号",
+    "title_en": "Titanic",
+    "director": "詹姆斯·卡梅隆",
+    "actor": ["莱昂纳多·迪卡普里奥"],
+    "year": 1997,
+    "country": "美国",
+    "types": ["剧情", "爱情", "灾难"]
+}
+{ "index" : { "_id" : "9" } }
+{
+    "title": "盗梦空间",
+    "title_en": "Inception",
+    "director": "克里斯托弗·诺兰",
+    "actor": ["莱昂纳多·迪卡普里奥"],
+    "year": 2010,
+    "country": "美国",
+    "types": ["剧情", "动作", "科幻", "悬疑", "冒险"]
+}
+{ "index" : { "_id" : "10" } }
+{
+    "title": "机器人总动员",
+    "title_en": "WALL·E",
+    "director": "安德鲁·斯坦顿",
+    "actor": ["本·贝尔特"],
+    "year": 2008,
+    "country": "美国",
+    "types": ["喜剧", "爱情", "科幻", "动画", "冒险"]
+}
+{ "index" : { "_id" : "11" } }
+{
+    "title": "海上钢琴师",
+    "title_en": "The Legend of 1900",
+    "director": "朱塞佩·托纳多雷",
+    "actor": ["蒂姆·罗斯"],
+    "year": 1998,
+    "country": "意大利",
+    "types": ["剧情", "音乐"]
+}
+{ "index" : { "_id" : "12" } }
+{
+    "title": "三傻大闹宝莱坞",
+    "title_en": "3 Idiots",
+    "director": "拉库马·希拉尼",
+    "actor": ["阿米尔·汗"],
+    "year": 2009,
+    "country": "印度",
+    "types": ["剧情", "喜剧", "爱情", "歌舞"]
+}
+
+## 轻量检索
+
+GET _search
+GET movies/_search
+GET movies/movie/_search
+GET movies/movie/_search?size=6&from=6
+GET movies/movie/_search?q=year:[2000 TO *]
+GET movies/movie/_search?q=year:[2000 TO *]&size=2&from=1
+GET movies/movie/_search?q=country:%E6%84%8F%E5%A4%A7%E5%88%A9  #意大利
+GET movies/movie/_search?q=year:[2000 TO *] AND country:%E7%BE%8E%E5%9B%BD  #美国
+
+year:[2000 TO *] AND country:美国
+types:动作
+types:"动作"
+actor:"阿米尔·汗"
+actor:"阿尔·汗"~1
+actor:"阿尔米·汗"~2
+types:"剧情" country:"美国"
+country:"美国" country:"意大利"^2 country:"中国"^5
+
+## 复杂检索
+
+### 全文搜索
+
+POST movies/movie/_search
+{
+  "query": {
+    "match": {
+      "country.keyword": "中国"
+    }
+  }
+}
+
+### 与或非逻辑
+
+POST movies/movie/_search
+{
+  "query": { 
+    "bool": {
+      "must" : [
+        { "range": { "year": { "gte": 2000 }}}
+      ],
+      "should": [
+        { "match": { "types.keyword": "动作" }},
+        { "match": { "types.keyword": "冒险" }}
+      ],
+      "must_not": [
+        { "match": { "country.keyword": "法国" }}
+      ]
+    }
+  }
+}
+
+### 对结果排序
+
+POST movies/movie/_search
+{
+  "query": { 
+    "bool": {
+      "must" : [
+        { "range": { "year": { "gte": 2000 }}}
+      ]
+    }
+  },
+  "sort" : [
+    { "year" : {"order" : "asc"}}
+  ]
+}
+
+### 使用脚本定义匹配条件
+
+POST movies/movie/_search
+{
+  "query": {
+    "script": {
+      "script": {
+        "lang": "painless",
+        "inline": "doc['actor.keyword'].value == doc['director.keyword'].value"
+      }
+    }
+  }
+}
+
+### 使用脚本定义返回内容
+
+POST movies/movie/_search
+{
+  "query": {
+    "match_all": {}
+  },
+  "script_fields": {
+    "some_value": {
+      "script": {
+        "lang": "painless",
+        "inline": "String text = doc['director.keyword'].value + \" => \"; for (def i = 0; i < doc['actor.keyword'].length; i++) {  if (i!=0) {text+=\" & \"} text += doc['actor.keyword'][i];} return text; "
+      }
+    }
+  }
+}
+
+### 脚本即定义匹配条件，也定义返回内容（组合以上两条）
+
+### 使用脚本为结果排序（评分）
+
+POST movies/movie/_search
+{
+  "query": {
+    "function_score": {
+      "script_score": {
+        "script": {
+          "lang": "painless",
+          "inline": "doc['year'].value % 100"
+        }
+      }
+    }
+  }
+}
+
+### 指标聚合：总数、求和、平均、极值
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs" : {
+      "total_count" : { "value_count" : { "field" : "year" } },
+      "min_year" : { "min" : { "field" : "year" } },
+      "max_year" : { "max" : { "field" : "year" } },
+      "avg_year" : { "avg" : { "field" : "year" } }
+  }
+}
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs" : {
+      "year_stats" : { "stats" : { "field" : "year" } }
+  }
+}
+
+### 指标聚合：无重复的集合大小（获得国家种类数目）
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs": {
+    "all_country": {
+      "cardinality": { "field": "country.keyword" }
+    }
+  }
+}
+
+### 桶聚合：按属性值分桶（列举国家种类）
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs": {
+    "all_country": {
+      "terms": { "field": "country.keyword" }
+    }
+  }
+}
+
+### 桶聚合：按属性范围分桶
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs": {
+    "movie_year": {
+      "range": {
+        "field": "year",
+        "ranges" : [
+          { "to" : 1995 },
+          { "from" : 1995, "to" : 2000 },
+          { "from" : 2000 }
+        ]
+      }
+    }
+  }
+}
+
+### 两种聚合(桶聚合和指标聚合)的嵌套
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs": {
+    "all_country": {
+      "terms": { "field": "country.keyword" },
+      "aggs" : {
+        "avg_year" : {
+          "avg" : { "field" : "year" }
+        }
+      }
+    }
+  }
+}
+
+### 同种聚合的嵌套（先按时间聚合，再按国家聚合）
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs": {
+    "range": {
+      "date_range": {
+        "field": "year",
+        "format": "yyyy",
+        "ranges": [
+            { "to": 1995 },
+            { "from": 1995, "to": 2000 },
+            { "from": 2000, "to": 2005 },
+            { "from": 2005 }
+        ]
+      },
+      "aggs": {
+        "all_country": {
+          "terms": { "field": "country.keyword" }
+        }
+      }
+    }
+  }
+}
+
+## 映射
+
+### 修改movie类型的映射属性
+
+GET movies/_mapping/movie
+
+PUT movies/_mapping/movie
+{
+  "movie": {
+    "properties": {
+      "country": {
+        "type": "text",
+        "fielddata": true
+      }
+    }
+  }
+}
+
+POST movies/movie/_search
+{
+  "size": 0,
+  "aggs": {
+    "all_country": {
+      "terms": { "field": "country" }
+    }
+  }
+}
+
+# 第三部分 数据可视化
+
+.es(index=filebeat-*).label('current') .es(index=filebeat-*, offset=-1d).label('last day')
+
+.es(index=filebeat-*, split=apache2.access.geoip.region_name:4)
+
+.es(index=filebeat-*).color(#DDD), .es(index=filebeat-*).mvavg(5h)
+
+.es(index=filebeat-*, q=apache2.access.response_code:200), .value(500).label('busy time')
+
+.es(index=filebeat-*, q=apache2.access.response_code:200), .value(500).label('busy time').color(red), .es(index=filebeat-*, q=apache2.access.response_code:200).if(lt, 500, 0).color(red).bars(1)
+
+# 第四部分 数据关联
+
+apache2.access.geoip.region_name & apache2.access.url
+
+apache2.access.site_area:"/search"
+
+# 第五部分 机器学习
+
+## 通过界面
+
+detectors: high_count
+
+influencers: apache2.access.geoip.region_name
+             apache2.access.site_area
+             apache2.access.response_code
+
+## 通过API
+
+cat <<EOF >data_feed.json
+{
+  "datafeed_id": "datafeed-service_response_change",
+  "job_id": "service_response_change",
+  "query": { "match_all": {} },
+  "types": [ "doc" ],
+  "query_delay": "60s",
+  "frequency": "600s",
+  "scroll_size": 1000,
+  "indices": [ "filebeat-*" ]
+}
+EOF
+
+cat <<EOF >job.json
+{
+  "job_id": "service_response_change",
+  "description": "service response change",
+  "analysis_config": {
+    "bucket_span": "30m",
+    "influencers": [
+      "apache2.access.geoip.region_name",
+      "apache2.access.site_area",
+      "apache2.access.response_code"
+    ],
+    "detectors": [
+      {
+        "function": "high_count",
+        "detector_description": "high_count",
+        "by_field_name": "apache2.access.response_code"
+      }
+    ]
+  },
+  "data_description": {
+    "time_field": "@timestamp"
+  },
+  "results_index_name": "service_response"
+}
+EOF
+
+curl -H "Content-Type: application/json" -XPUT http://`hostname -i`:9200/_xpack/ml/anomaly_detectors/service_response_change -u elastic:changeme -d @job.json
+
+curl -H "Content-Type: application/json" -X PUT http://`hostname -i`:9200/_xpack/ml/datafeeds/datafeed-service_response_change -u elastic:changeme  -d @data_feed.json
+
+# 第六部分 数据告警
+
+docker logs --tail 10 -f elasticsearch
+
+GET _cat/indices
+
+PUT _xpack/watcher/watch/access_anomaly_watch
+{
+  "trigger": { "schedule": { "interval": "10s" } },
+  "input": {
+    "search": {
+      "request": {
+        "indices": [ ".ml-anomalies-custom-service_response" ],
+        "body": {
+          "query": {
+            "bool": {
+              "filter": [
+                { "range": { "timestamp": { "gte": "now-1d", "lte": "now" } } },
+                { "term": { "result_type": "bucket" } },
+                { "term": { "job_id": "service_response_change" } },
+                { "range": { "anomaly_score": { "gte": "60" } } }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "condition": {
+    "compare": { "ctx.payload.hits.total": { "gt": 0 } }
+  },
+  "actions": {
+    "log": {
+      "transform": {
+        "script": "['details':ctx.payload.hits.hits.stream().map(p -> ['score':p._source.anomaly_score,'time':Instant.ofEpochMilli(p._source.timestamp).atZone(ZoneId.of(\"+8\")).format(DateTimeFormatter.ofPattern('yyyy-MM-dd HH:mm:ss')),'cause_by':p._source.bucket_influencers.0.influencer_field_name]).collect(Collectors.toList())]"
+      },
+      "logging": {
+        "text": "Anomalies:\n{{#ctx.payload.details}}score={{score}} at time={{time}} cause by {{cause_by}}\n{{/ctx.payload.details}}"
+      }
+    }
+  }
+}
+
+DELETE _xpack/watcher/watch/access_anomaly_watch
+
