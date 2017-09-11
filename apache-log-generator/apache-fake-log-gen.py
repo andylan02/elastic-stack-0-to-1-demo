@@ -171,6 +171,8 @@ parser.add_argument("--404-begin-time", dest='error_404_start_time',
                     help="Begin time of 404 errors generated in seconds", type=int, default=1)
 parser.add_argument("--404-end-time", dest='error_404_end_time',
                     help="End time of 404 errors generated in seconds", type=int, default=86400)
+parser.add_argument("--time-zone", "-t", dest='time_zone',
+                    help="Specify timezone, e.g. China timezone: '+0800', default is system timezone", type=str)
 
 args = parser.parse_args()
 log_lines = args.log_lines
@@ -181,6 +183,7 @@ generate_days = args.generate_days
 more_404 = args.more_404_error
 error_404_start_time = args.error_404_start_time
 error_404_end_time = args.error_404_end_time
+time_zone = args.time_zone
 
 if log_lines.find('/') > 0:
     min_line = int(log_lines.split('/')[0])
@@ -214,7 +217,7 @@ for i in range(generate_days):
 
         ip = get_a_china_ip()  # faker.ipv4()
         dt = otime.strftime('%d/%b/%Y:%H:%M:%S')
-        tz = datetime.datetime.now(get_localzone()).strftime('%z')
+        tz = time_zone if time_zone else datetime.datetime.now(get_localzone()).strftime('%z')
         vrb, uri = generate_uri()
         byt = int(random.gauss(5000, 50))
         referer = faker.uri()

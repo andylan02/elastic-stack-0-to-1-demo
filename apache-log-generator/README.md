@@ -71,6 +71,9 @@ optional arguments:
                         Begin time of 404 errors generated in seconds
   --404-end-time ERROR_404_END_TIME
                         End time of 404 errors generated in seconds
+  --time-zone TIME_ZONE, -t TIME_ZONE
+                        Specify timezone, e.g. China timezone: '+0800',
+                        default is system timezone
 ```
 
 
