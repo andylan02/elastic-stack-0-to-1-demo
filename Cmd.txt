@@ -19,15 +19,15 @@ sudo sysctl -p
 
 mkdir logs && cd logs
 
-wget https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/apache-log-generator/requirements.txt
+curl -O https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/apache-log-generator/requirements.txt
 sudo apt install -y python3-pip
 pip3 install -r requirements.txt
 
-wget https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/apache-log-generator/apache-fake-log-gen.py
+curl -O https://raw.githubusercontent.com/linfan/elastic-stack-0-to-1-demo/master/apache-log-generator/apache-fake-log-gen.py
 for i in `seq -f '%02g' 3 10`; do
-  python3 apache-fake-log-gen.py -c 40000/60000 -s 2017-09-$i >log-$i.log &
+  python3 apache-fake-log-gen.py -c 40000/60000 -s 2017-09-$i -t '+0800' >log-$i.log &
 done
-python3 apache-fake-log-gen.py -c 50000 -s 2017-09-11 --more-404 --404-begin-time 50000 >log-11.log
+python3 apache-fake-log-gen.py -c 50000 -s 2017-09-11 --more-404 --404-begin-time 50000 -t '+0800' >log-11.log
 
 ## 定义encode_url函数
 
@@ -166,7 +166,7 @@ GET movies
 
 DELETE movies
 
-POST movies
+PUT movies
 {
   "settings": {
     "index": {
@@ -318,9 +318,9 @@ types:动作
 types:"动作"
 actor:"阿米尔·汗"
 actor:"阿尔·汗"~1
-actor:"阿尔米·汗"~2
+actor:"米阿·汗尔"~2
 types:"剧情" country:"美国"
-country:"美国" country:"意大利"^2 country:"中国"^5
+country:"美国" country:"意大利"^2 country:"中国"^4
 
 ## 复杂检索
 
@@ -557,21 +557,37 @@ POST movies/movie/_search
 
 # 第三部分 数据可视化
 
+## Visualize & Dashboard
+
+> 见`dashboard`目录
+
+## Timelion
+
+### 多曲戏
+
 .es(index=filebeat-*).label('current') .es(index=filebeat-*, offset=-1d).label('last day')
+
+### 加载数据参数
 
 .es(index=filebeat-*, split=apache2.access.geoip.region_name:4)
 
+### 颜色和平滑
+
 .es(index=filebeat-*).color(#DDD), .es(index=filebeat-*).mvavg(5h)
 
-.es(index=filebeat-*, q=apache2.access.response_code:200), .value(500).label('busy time')
+### 水平线
 
-.es(index=filebeat-*, q=apache2.access.response_code:200), .value(500).label('busy time').color(red), .es(index=filebeat-*, q=apache2.access.response_code:200).if(lt, 500, 0).color(red).bars(1)
+.es(index=filebeat-*, q=apache2.access.response_code:200), .value(3000).label('busy time')
+
+### 条件语句
+
+.es(index=filebeat-*, q=apache2.access.response_code:200), .value(3000).label('busy time').color(red), .es(index=filebeat-*, q=apache2.access.response_code:200).if(lt, 3000, 0).color(red).bars(1)
 
 # 第四部分 数据关联
 
-apache2.access.geoip.region_name & apache2.access.url
-
-apache2.access.site_area:"/search"
+- 索引 filebeat-*
+- 关联项，例如 apache2.access.geoip.region_name & apache2.access.url
+- 初始查询，例如 apache2.access.site_area:"/search"
 
 # 第五部分 机器学习
 
@@ -603,7 +619,7 @@ cat <<EOF >job.json
   "job_id": "service_response_change",
   "description": "service response change",
   "analysis_config": {
-    "bucket_span": "30m",
+    "bucket_span": "10m",
     "influencers": [
       "apache2.access.geoip.region_name",
       "apache2.access.site_area",
@@ -630,7 +646,7 @@ curl -H "Content-Type: application/json" -X PUT http://`hostname -i`:9200/_xpack
 
 # 第六部分 数据告警
 
-docker logs --tail 10 -f elasticsearch
+docker logs --tail 2 -f elasticsearch
 
 GET _cat/indices
 
